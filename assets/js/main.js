@@ -81,7 +81,7 @@ function updateCartDisplay(data) {
 // Cart management functions in global scope
 window.loadCartItems = function() {
     $.ajax({
-        url: 'api/cart/manage.php?action=get',
+        url: (window.API_BASE||'') + 'api/cart/manage.php?action=get',
         method: 'GET',
         success: function(response) {
             if (response.status === 'success') {
@@ -103,7 +103,7 @@ window.updateCartQuantity = function(cartId, quantity) {
     }
 
     $.ajax({
-        url: 'api/cart/manage.php?action=update',
+        url: (window.API_BASE||'') + 'api/cart/manage.php?action=update',
         method: 'POST',
         data: {
             cart_id: cartId,
@@ -124,7 +124,7 @@ window.updateCartQuantity = function(cartId, quantity) {
 
 window.removeCartItem = function(cartId) {
     $.ajax({
-        url: 'api/cart/manage.php?action=remove',
+        url: (window.API_BASE||'') + 'api/cart/manage.php?action=remove',
         method: 'POST',
         data: {
             cart_id: cartId
@@ -170,7 +170,7 @@ jQuery(function($) {
 
         // Get cart data and submit order
         $.ajax({
-            url: 'api/cart/manage.php?action=get',
+            url: (window.API_BASE||'') + 'api/cart/manage.php?action=get',
             method: 'GET',
             success: function(cartResponse) {
                 console.log('Cart data:', cartResponse);
@@ -201,24 +201,29 @@ jQuery(function($) {
                 
                 // Submit order
                 $.ajax({
-                    url: 'api/orders/create.php',
+                    url: (window.API_BASE||'') + 'api/orders/create.php',
                     method: 'POST',
                     data: JSON.stringify(orderData),
                     contentType: 'application/json',
                     success: function(response) {
                         console.log('Order response:', response);
                         if (response.success) {
-                            showNotification(`Order #${response.orderNumber} placed successfully!`, 'success');
-                            loadCartItems();
                             $('#cartSidebar').removeClass('open');
                             // Open per-category print tickets
                             if (response.orderId && response.tickets) {
                                 const oid = response.orderId;
-                                const base = 'views/print/';
+                                const base = (window.API_BASE||'') + 'views/print/';
                                 if (response.tickets.coffee)  window.open(base + 'coffee_ticket.php?order_id='  + oid, '_blank');
                                 if (response.tickets.juice)   window.open(base + 'juice_ticket.php?order_id='   + oid, '_blank');
                                 if (response.tickets.bar)     window.open(base + 'bar_ticket.php?order_id='     + oid, '_blank');
                                 if (response.tickets.kitchen) window.open(base + 'kitchen_ticket.php?order_id=' + oid, '_blank');
+                            }
+                            // Show modal if available (admin/menu.php), else show notification
+                            if (typeof window.showOrderCompleteModal === 'function') {
+                                window.showOrderCompleteModal(response.orderNumber);
+                            } else {
+                                showNotification('Order #' + response.orderNumber + ' placed successfully!', 'success');
+                                loadCartItems();
                             }
                         } else {
                             showNotification(response.message || 'Error placing order', 'error');
@@ -284,7 +289,7 @@ function handleCheckout(e) {
         
         // Get current cart data
         $.ajax({
-            url: 'api/cart/manage.php?action=get',
+            url: (window.API_BASE||'') + 'api/cart/manage.php?action=get',
             method: 'GET',
             success: function(cartResponse) {
                 console.log('Cart data received:', cartResponse);
@@ -315,7 +320,7 @@ function handleCheckout(e) {
                 
                 // Submit order
                 $.ajax({
-                    url: 'api/orders/create.php',
+                    url: (window.API_BASE||'') + 'api/orders/create.php',
                     method: 'POST',
                     data: JSON.stringify(orderData),
                     contentType: 'application/json',
@@ -397,7 +402,7 @@ function handleCheckout(e) {
         btn.prop('disabled', true);
 
         $.ajax({
-            url: 'api/cart/manage.php?action=add',
+            url: (window.API_BASE||'') + 'api/cart/manage.php?action=add',
             method: 'POST',
             data: JSON.stringify({ menu_item_id: itemId, quantity: quantity }),
             contentType: 'application/json',

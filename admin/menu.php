@@ -1,436 +1,320 @@
 <?php
 require_once '../config/config.php';
 require_once '../includes/Database.php';
+require_once '../includes/session_check.php';
 
-$pageTitle = 'Menu Items';
-$currentPage = 'menu';
+// Check waiter session validity
+checkTableSession();
 
-// Get database instance
 $db = Database::getInstance();
 
-// Handle form submission
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (isset($_POST['action'])) {
-        $name = $_POST['name'] ?? '';
-        $price = $_POST['price'] ?? 0;
-        $description = $_POST['description'] ?? '';
-        $category_id = $_POST['category_id'] ?? null;
-        $is_drink = isset($_POST['is_drink']) ? 1 : 0;
-        $is_active = isset($_POST['is_active']) ? 1 : 0;
-        $slug = strtolower(str_replace(' ', '-', $name));
-        
-        // Handle file upload
-        $image_path = null;
-        if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
-            $uploadDir = '../uploads/menu/';
-            if (!is_dir($uploadDir)) {
-                mkdir($uploadDir, 0777, true);
-            }
-            
-            $fileExtension = pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION);
-            $fileName = uniqid() . '.' . $fileExtension;
-            $targetPath = $uploadDir . $fileName;
-            
-            if (move_uploaded_file($_FILES['image']['tmp_name'], $targetPath)) {
-                $image_path = 'uploads/menu/' . $fileName;
-            }
-        }
+// Get all active categories with proper ordering
+$categories = $db->fetchAll("SELECT * FROM categories WHERE is_active = 1 ORDER BY name");
 
-        if ($_POST['action'] === 'create') {
-            // Create new menu item (default is_active = 1)
-           $data = [
-                'name' => $name,
-                'slug' => $slug,
-                'description' => $description,
-                'price' => $price,
-                'category_id' => $category_id,
-                'is_drink' => $is_drink,
-                'image_path' => $image_path
-            ];
-            $db->insert('menu_items', $data);
-        } elseif ($_POST['action'] === 'update') {
-            // Update existing menu item
-            $id = $_POST['id'] ?? 0;
-            // Get the current is_drink status
-            $current_item = $db->fetch("SELECT is_drink FROM menu_items WHERE id = ?", [$id]);
-            $was_drink = $current_item['is_drink'];
+// Get all active menu items
+$menuItems = $db->fetchAll("SELECT * FROM menu_items WHERE is_active = 1 ORDER BY category_id, name");
 
-            $data = [
-                'name' => $name,
-                'slug' => $slug,
-                'description' => $description,
-                'price' => $price,
-                'category_id' => $category_id,
-                'is_drink' => $is_drink,
-                'is_active' => $is_active
-            ];
-            if ($image_path) {
-                $data['image_path'] = $image_path;
-            }
-            $db->update('menu_items', $data, 'id = ?', [$id]);
-
-            // If item was converted to a drink, create drink_stock entry
-            if (!$was_drink && $is_drink) {
-                $db->insert('drink_stock', [
-                    'menu_item_id' => $id,
-                    'quantity' => 0
-                ]);
-            }
-        } elseif ($_POST['action'] === 'delete') {
-            // Delete menu item
-            $id = $_POST['id'] ?? 0;
-            $db->delete('menu_items', 'id = ?', [$id]);
-        }
-        
-        header('Location: menu.php');
-        exit;
+// Group menu items by category
+$menuByCategory = [];
+foreach ($menuItems as $item) {
+    if (!isset($menuByCategory[$item['category_id']])) {
+        $menuByCategory[$item['category_id']] = [];
     }
+    $menuByCategory[$item['category_id']][] = $item;
 }
 
-// Get all categories with their parent info
-$categories = $db->fetchAll("
-    SELECT c.*, p.name as parent_name 
-    FROM categories c 
-    LEFT JOIN categories p ON c.parent_id = p.id 
-    ORDER BY CASE WHEN c.parent_id IS NULL THEN 0 ELSE 1 END, c.name
-");
-
-// Get all menu items with category info
-$menuItems = $db->fetchAll("
-    SELECT m.*, c.name as category_name, p.name as parent_category_name
-    FROM menu_items m
-    LEFT JOIN categories c ON m.category_id = c.id
-    LEFT JOIN categories p ON c.parent_id = p.id
-    ORDER BY c.name, m.name
-");
-
-include 'header.php';
+// Group categories by parent
+$parentCategories = [];
+$childCategories = [];
+foreach ($categories as $category) {
+    if (empty($category['parent_id'])) {
+        $parentCategories[] = $category;
+    } else {
+        if (!isset($childCategories[$category['parent_id']])) {
+            $childCategories[$category['parent_id']] = [];
+        }
+        $childCategories[$category['parent_id']][] = $category;
+    }
+}
 ?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= SITE_NAME ?> - Menu</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="../assets/css/style.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script>
+        const CURRENCY = <?php echo json_encode(CURRENCY); ?>;
+        const BASE_URL = <?php echo json_encode(BASE_URL); ?>;
+        const WAITER_NAME = <?php echo json_encode($_SESSION['waiter_name'] ?? ''); ?>;
+        window.API_BASE = '../';
+    </script>
+</head>
+<body>
+    <!-- Navigation - Only visible on desktop -->
+    <nav class="navbar navbar-dark bg-dark sticky-top d-none d-lg-block">
+        <div class="container">
+            <a class="navbar-brand" href="menu.php">
+                <img src="../assets/images/logo.jpg" alt="<?= SITE_NAME ?>" height="40">
+            </a>
+            <ul class="navbar-nav ms-auto d-flex flex-row">
+                <li class="nav-item mx-2">
+                    <span class="nav-link">Waiter: <?= htmlspecialchars($_SESSION['waiter_name'] ?? '') ?></span>
+                </li>
+                <li class="nav-item mx-2">
+                    <a class="nav-link cart-link" href="#" id="cartToggle2">
+                        <i class="fas fa-shopping-cart"></i>
+                        <span class="cart-count badge bg-primary">0</span>
+                    </a>
+                </li>
+                <li class="nav-item mx-2">
+                    <a class="nav-link" href="../logout.php">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </nav>
 
-<div class="container-fluid py-4">
-    <!-- Add Menu Item Modal -->
-    <div class="modal fade" id="addMenuItemModal" tabindex="-1" aria-labelledby="addMenuItemModalLabel" aria-hidden="true">
-        <div class="modal-dialog">
+    <!-- Mobile Waiter Display -->
+    <div class="d-lg-none bg-dark text-white text-center py-2" style="position: fixed; top: 0; left: 0; right: 0; z-index: 1000;">
+        <span>Waiter: <?= htmlspecialchars($_SESSION['waiter_name'] ?? '') ?></span>
+    </div>
+
+    <!-- Cart Sidebar -->
+    <div id="cartSidebar" class="cart-sidebar">
+        <div class="cart-header">
+            <h4>Your Cart</h4>
+            <button type="button" class="btn-close" id="closeCart"></button>
+        </div>
+        <div class="cart-items" id="cartItems">
+            <!-- Cart items will be dynamically inserted here -->
+        </div>
+        <div class="cart-footer">
+            <div class="d-flex justify-content-between mb-2">
+                <span>Total:</span>
+                <span id="cartTotal">$0.00</span>
+            </div>
+            <button class="btn btn-primary w-100" id="checkout">Checkout</button>
+        </div>
+    </div>
+
+    <!-- Menu Section -->
+    <div class="container py-5" style="padding-bottom: 80px !important; padding-top: 60px !important;">
+        <h1 class="text-center mb-5">Our Menu</h1>
+
+        <!-- Search Bar -->
+        <div class="row mb-4">
+            <div class="col-md-6 mx-auto">
+                <div class="input-group">
+                    <span class="input-group-text"><i class="fas fa-search"></i></span>
+                    <input type="text" class="form-control" id="menuSearch" placeholder="Search menu items...">
+                </div>
+            </div>
+        </div>
+
+        <!-- Category Tabs -->
+        <ul class="nav nav-pills mb-4 justify-content-center" id="menuTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" data-bs-toggle="pill" data-bs-target="#all">All Items</button>
+            </li>
+            <?php foreach ($parentCategories as $parent): ?>
+                <li class="nav-item dropdown" role="presentation">
+                    <button class="nav-link dropdown-toggle" data-bs-toggle="dropdown">
+                        <?= htmlspecialchars($parent['name']) ?>
+                    </button>
+                    <ul class="dropdown-menu">
+                        <li>
+                            <button class="dropdown-item" data-bs-toggle="pill" data-bs-target="#category-<?= $parent['id'] ?>">
+                                All <?= htmlspecialchars($parent['name']) ?>
+                            </button>
+                        </li>
+                        <?php if (isset($childCategories[$parent['id']])): ?>
+                            <?php foreach ($childCategories[$parent['id']] as $child): ?>
+                                <li>
+                                    <button class="dropdown-item" data-bs-toggle="pill" data-bs-target="#category-<?= $child['id'] ?>">
+                                        <?= htmlspecialchars($child['name']) ?>
+                                    </button>
+                                </li>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </ul>
+                </li>
+            <?php endforeach; ?>
+        </ul>
+
+        <!-- Menu Items Grid -->
+        <div class="tab-content" id="menuContent">
+            <!-- All Items Tab -->
+            <div class="tab-pane fade show active" id="all">
+                <div class="row g-2">
+                    <?php foreach ($menuItems as $item): ?>
+                        <div class="col-6 col-md-4 col-lg-3" style="margin-bottom: 10px;">
+                            <div class="card h-100" style="box-shadow: 0 2px 4px rgba(0,0,0,0.1); border-radius: 8px;">
+                                <div style="height: 140px; overflow: hidden;">
+                                    <img src="<?= htmlspecialchars($item['image_path'] ? '../' . $item['image_path'] : '../assets/images/placeholder.jpg') ?>"
+                                         class="card-img-top"
+                                         alt="<?= htmlspecialchars($item['name']) ?>"
+                                         style="height: 100%; width: 100%; object-fit: cover;">
+                                </div>
+                                <div class="card-body p-2" style="font-size: 0.9rem;">
+                                    <h5 class="card-title mb-1" style="font-size: 1rem; font-weight: 600;"><?= htmlspecialchars($item['name']) ?></h5>
+                                    <p class="card-text mb-1" style="font-size: 0.8rem; color: #666; height: 32px; overflow: hidden;"><?= htmlspecialchars($item['description']) ?></p>
+                                    <div class="price mb-2" style="color: #2c3e50; font-weight: 600;"><?= CURRENCY ?> <?= number_format($item['price'], 2) ?></div>
+                                    <div class="d-flex gap-1 justify-content-between align-items-center">
+                                        <div class="input-group input-group-sm flex-nowrap" style="width: 85px;">
+                                            <button type="button" class="btn btn-outline-secondary btn-decrease px-1" data-item-id="<?= $item['id'] ?>" style="padding: 2px 6px;">-</button>
+                                            <input type="text" class="form-control text-center item-quantity p-0" value="1" style="width: 30px; border-left: none; border-right: none;" readonly>
+                                            <button type="button" class="btn btn-outline-secondary btn-increase px-1" data-item-id="<?= $item['id'] ?>" style="padding: 2px 6px;">+</button>
+                                        </div>
+                                        <button type="button" class="btn btn-primary btn-sm add-to-cart" data-item-id="<?= $item['id'] ?>" style="padding: 4px 8px;">
+                                            <i class="fas fa-cart-plus"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+
+            <!-- Per-Category Tabs -->
+            <?php foreach ($categories as $category): ?>
+                <div class="tab-pane fade" id="category-<?= $category['id'] ?>">
+                    <div class="row g-2">
+                        <?php if (isset($menuByCategory[$category['id']])): ?>
+                            <?php foreach ($menuByCategory[$category['id']] as $item): ?>
+                                <div class="col-6 col-md-4 col-lg-3" style="margin-bottom: 10px;">
+                                    <div class="card h-100" style="box-shadow: 0 2px 4px rgba(0,0,0,0.1); border-radius: 8px;">
+                                        <div style="height: 140px; overflow: hidden;">
+                                            <img src="<?= htmlspecialchars($item['image_path'] ? '../' . $item['image_path'] : '../assets/images/placeholder.jpg') ?>"
+                                                 class="card-img-top"
+                                                 alt="<?= htmlspecialchars($item['name']) ?>"
+                                                 style="height: 100%; width: 100%; object-fit: cover;">
+                                        </div>
+                                        <div class="card-body p-2" style="font-size: 0.9rem;">
+                                            <h5 class="card-title mb-1" style="font-size: 1rem; font-weight: 600;"><?= htmlspecialchars($item['name']) ?></h5>
+                                            <p class="card-text mb-1" style="font-size: 0.8rem; color: #666; height: 32px; overflow: hidden;"><?= htmlspecialchars($item['description']) ?></p>
+                                            <div class="price mb-2" style="color: #2c3e50; font-weight: 600;"><?= CURRENCY ?> <?= number_format($item['price'], 2) ?></div>
+                                            <div class="d-flex gap-1 justify-content-between align-items-center">
+                                                <div class="input-group input-group-sm flex-nowrap" style="width: 85px;">
+                                                    <button type="button" class="btn btn-outline-secondary btn-decrease px-1" data-item-id="<?= $item['id'] ?>" style="padding: 2px 6px;">-</button>
+                                                    <input type="text" class="form-control text-center item-quantity p-0" value="1" style="width: 30px; border-left: none; border-right: none;" readonly>
+                                                    <button type="button" class="btn btn-outline-secondary btn-increase px-1" data-item-id="<?= $item['id'] ?>" style="padding: 2px 6px;">+</button>
+                                                </div>
+                                                <button type="button" class="btn btn-primary btn-sm add-to-cart" data-item-id="<?= $item['id'] ?>" style="padding: 4px 8px;">
+                                                    <i class="fas fa-cart-plus"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <div class="col-12">
+                                <p class="text-center">No items available in this category.</p>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+
+    <!-- Mobile Bottom Navigation -->
+    <nav class="mobile-bottom-nav d-lg-none" style="position: fixed; bottom: 0; left: 0; right: 0; background: #343a40; display: flex; justify-content: space-around; align-items: center; padding: 0.5rem; z-index: 1000; box-shadow: 0 -2px 10px rgba(0,0,0,0.1);">
+        <a href="menu.php" class="mobile-nav-item active" style="color: #fff; text-decoration: none; display: flex; flex-direction: column; align-items: center; padding: 0.5rem 1rem; position: relative;">
+            <i class="fas fa-utensils" style="font-size: 1.2rem; margin-bottom: 0.2rem;"></i>
+            <span style="font-size: 0.8rem;">Menu</span>
+        </a>
+        <a href="#" class="mobile-nav-item cart-link" id="cartToggle" style="color: #fff; text-decoration: none; display: flex; flex-direction: column; align-items: center; padding: 0.5rem 1rem; position: relative;">
+            <i class="fas fa-shopping-cart" style="font-size: 1.2rem; margin-bottom: 0.2rem;"></i>
+            <span style="font-size: 0.8rem;">Cart</span>
+            <span class="cart-count badge bg-primary" style="position: absolute; top: 0; right: 25%; transform: translateX(50%);">0</span>
+        </a>
+        <a href="../logout.php" class="mobile-nav-item" style="color: #fff; text-decoration: none; display: flex; flex-direction: column; align-items: center; padding: 0.5rem 1rem; position: relative;">
+            <i class="fas fa-sign-out-alt" style="font-size: 1.2rem; margin-bottom: 0.2rem;"></i>
+            <span style="font-size: 0.8rem;">Logout</span>
+        </a>
+    </nav>
+
+    <!-- Multiple Orders Modal -->
+    <div class="modal fade" id="orderCompleteModal" tabindex="-1" aria-labelledby="orderCompleteModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+        <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="addMenuItemModalLabel">Add New Menu Item</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <h5 class="modal-title" id="orderCompleteModalLabel">
+                        <i class="fas fa-check-circle text-success me-2"></i>Order Placed!
+                    </h5>
                 </div>
-                <div class="modal-body">
-                    <form action="menu.php" method="POST" enctype="multipart/form-data">
-                        <input type="hidden" name="action" value="create">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label for="name" class="form-label">Name</label>
-                                    <input type="text" class="form-control" id="name" name="name" required>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label for="price" class="form-label">Price</label>
-                                    <input type="number" step="0.01" class="form-control" id="price" name="price" required>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label for="category_id" class="form-label">Category</label>
-                                    <select class="form-select" id="category_id" name="category_id" required>
-                                        <option value="">Select Category</option>
-                                        <?php foreach ($categories as $category): ?>
-                                            <?php if ($category['parent_id'] === null): ?>
-                                                <optgroup label="<?= h($category['name']) ?>">
-                                                    <option value="<?= $category['id'] ?>"><?= h($category['name']) ?> (Main Category)</option>
-                                                    <?php foreach ($categories as $subcat): ?>
-                                                        <?php if ($subcat['parent_id'] === $category['id']): ?>
-                                                            <option value="<?= $subcat['id'] ?>"><?= h($subcat['name']) ?></option>
-                                                        <?php endif; ?>
-                                                    <?php endforeach; ?>
-                                                </optgroup>
-                                            <?php endif; ?>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label for="image" class="form-label">Image</label>
-                                    <input type="file" class="form-control" id="image" name="image" accept="image/*">
-                                </div>
-                            </div>
-                        </div>
-                        <div class="mb-3">
-                            <label for="description" class="form-label">Description</label>
-                            <textarea class="form-control" id="description" name="description" rows="3"></textarea>
-                        </div>
-                        <div class="mb-3">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="is_drink" name="is_drink">
-                                <label class="form-check-label" for="is_drink">
-                                    Is Drink (Will create inventory entry)
-                                </label>
-                            </div>
-                        </div>
-                        <button type="submit" class="btn btn-primary">Add Menu Item</button>
-                    </form>
+                <div class="modal-body text-center">
+                    <p class="mb-1">Order <strong id="modalOrderNumber"></strong> submitted successfully.</p>
+                    <p class="text-muted">What would you like to do next?</p>
+                </div>
+                <div class="modal-footer d-flex gap-2 justify-content-center">
+                    <button type="button" class="btn btn-success" id="sameWaiterBtn">
+                        <i class="fas fa-redo me-1"></i>New Order &mdash; Same Waiter
+                    </button>
+                    <a href="../logout.php" class="btn btn-outline-secondary">
+                        <i class="fas fa-user me-1"></i>New Order &mdash; Different Waiter
+                    </a>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Add Button -->
-    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addMenuItemModal">
-        Add Menu Item
-    </button>
+    <!-- Scripts -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="../assets/js/main.js"></script>
+    <script>
+        // Expose modal trigger for main.js to call after successful order
+        window.showOrderCompleteModal = function(orderNumber) {
+            document.getElementById('modalOrderNumber').textContent = '#' + orderNumber;
+            new bootstrap.Modal(document.getElementById('orderCompleteModal')).show();
+        };
 
-    <!-- Menu Items Table -->
-    <div class="card">
-        <div class="card-header">
-            <h5 class="card-title mb-0">Menu Items</h5>
-        </div>
-        <div class="card-body">
-            <div class="table-responsive">
-                <table id="menuItemsTable" class="table table-hover">
-                    <thead>
-                        <tr>
-                            <th>Image</th>
-                            <th>Name</th>
-                            <th>Category</th>
-                            <th>Price</th>
-                            <th>Description</th>
-                            <th>Type</th>
-                            <th>Status</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($menuItems as $item): ?>
-                            <tr>
-                                <td>
-                                    <?php if ($item['image_path']): ?>
-                                        <img src="<?= BASE_URL ?>/<?= h($item['image_path']) ?>" 
-                                             alt="<?= h($item['name']) ?>" 
-                                             class="menu-thumbnail"
-                                             style="width: 50px; height: 50px; object-fit: cover;">
-                                    <?php endif; ?>
-                                </td>
-                                <td><?= h($item['name']) ?></td>
-                                <td>
-                                    <?php if ($item['parent_category_name']): ?>
-                                        <?= h($item['parent_category_name']) ?> &gt; 
-                                    <?php endif; ?>
-                                    <?= h($item['category_name']) ?>
-                                </td>
-                                <td><?= h($item['price']) ?> <?= CURRENCY ?></td>
-                                <td><?= h($item['description']) ?></td>
-                                <td>
-                                    <?php if ($item['is_drink']): ?>
-                                        <span class="badge bg-info">Drink</span>
-                                    <?php else: ?>
-                                        <span class="badge bg-secondary">Food</span>
-                                    <?php endif; ?>
-                                </td>
-                                <td>
-                                    <?php if ($item['is_active']): ?>
-                                        <span class="badge bg-success">Active</span>
-                                    <?php else: ?>
-                                        <span class="badge bg-danger">Inactive</span>
-                                    <?php endif; ?>
-                                </td>
-                                <td>
-                                    <div class="btn-group btn-group-sm">
-                                        <button type="button" class="btn btn-primary edit-item" 
-                                                data-id="<?= $item['id'] ?>"
-                                                data-name="<?= h($item['name']) ?>"
-                                                data-price="<?= h($item['price']) ?>"
-                                                data-description="<?= h($item['description']) ?>"
-                                                data-category-id="<?= $item['category_id'] ?>"
-                                                data-is-drink="<?= $item['is_drink'] ?>"
-                                                data-is-active="<?= $item['is_active'] ?>">
-                                            <i class="fas fa-edit"></i>
-                                        </button>
-                                        <!--<button type="button" class="btn btn-danger delete-item"-->
-                                        <!--        data-id="<?= $item['id'] ?>"-->
-                                        <!--        data-name="<?= h($item['name']) ?>">-->
-                                        <!--    <i class="fas fa-trash"></i>-->
-                                        <!--</button>-->
-                                    </div>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Edit Menu Item Modal -->
-<div class="modal fade" id="editItemModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Edit Menu Item</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <form action="menu.php" method="POST" enctype="multipart/form-data" id="editForm">
-                    <input type="hidden" name="action" value="update">
-                    <input type="hidden" name="id" id="edit_id">
-                    <div class="mb-3">
-                        <label for="edit_name" class="form-label">Name</label>
-                        <input type="text" class="form-control" id="edit_name" name="name" required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="edit_price" class="form-label">Price</label>
-                        <input type="number" step="0.01" class="form-control" id="edit_price" name="price" required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="edit_category_id" class="form-label">Category</label>
-                        <select class="form-select" id="edit_category_id" name="category_id" required>
-                            <option value="">Select Category</option>
-                            <?php foreach ($categories as $category): ?>
-                                <?php if ($category['parent_id'] === null): ?>
-                                    <optgroup label="<?= h($category['name']) ?>">
-                                        <option value="<?= $category['id'] ?>"><?= h($category['name']) ?> (Main Category)</option>
-                                        <?php foreach ($categories as $subcat): ?>
-                                            <?php if ($subcat['parent_id'] === $category['id']): ?>
-                                                <option value="<?= $subcat['id'] ?>"><?= h($subcat['name']) ?></option>
-                                            <?php endif; ?>
-                                        <?php endforeach; ?>
-                                    </optgroup>
-                                <?php endif; ?>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label for="edit_description" class="form-label">Description</label>
-                        <textarea class="form-control" id="edit_description" name="description" rows="3"></textarea>
-                    </div>
-                    <div class="mb-3">
-                        <label for="edit_image" class="form-label">Image (Leave empty to keep current)</label>
-                        <input type="file" class="form-control" id="edit_image" name="image" accept="image/*">
-                    </div>
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="edit_is_drink" name="is_drink">
-                                    <label class="form-check-label" for="edit_is_drink">
-                                        Is Drink
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="edit_is_active" name="is_active">
-                                    <label class="form-check-label" for="edit_is_active">
-                                        Is Active
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <button type="submit" class="btn btn-primary">Update Menu Item</button>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Delete Menu Item Modal -->
-<div class="modal fade" id="deleteItemModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Delete Menu Item</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <p>Are you sure you want to delete "<span id="deleteItemName"></span>"?</p>
-                <form action="menu.php" method="POST" id="deleteForm">
-                    <input type="hidden" name="action" value="delete">
-                    <input type="hidden" name="id" id="delete_id">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-danger">Delete</button>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Initialize menu items DataTable
-    $('#menuItemsTable').DataTable({
-        pageLength: 1000,
-        order: [[1, 'asc']],  // Sort by name by default
-        columnDefs: [
-            { orderable: false, targets: [0, -1] }  // Disable sorting for image and actions columns
-        ]
-    });
-
-    // Handle is_drink checkbox changes
-    const editIsDrinkCheckbox = document.getElementById('edit_is_drink');
-    editIsDrinkCheckbox.addEventListener('change', function() {
-        const originalValue = this.getAttribute('data-original-value') === '1';
-        const newValue = this.checked;
-
-        if (originalValue !== newValue) {
-            let message = originalValue ? 
-                'Warning: Converting a drink item to a non-drink item may affect existing inventory records.' :
-                'Warning: Converting a non-drink item to a drink will create a new inventory record with default stock of 0.';
-                
-            if (!confirm(message + '\n\nDo you want to continue?')) {
-                this.checked = originalValue;
-            }
-        }
-    });
-
-    // Edit Menu Item
-    const editButtons = document.querySelectorAll('.edit-item');
-    const editModal = new bootstrap.Modal(document.getElementById('editItemModal'));
-    
-    editButtons.forEach(button => {
-        button.addEventListener('click', function() {
-            const data = this.dataset;
-            document.getElementById('edit_id').value = data.id;
-            document.getElementById('edit_name').value = data.name;
-            document.getElementById('edit_price').value = data.price;
-            document.getElementById('edit_category_id').value = data.categoryId;
-            document.getElementById('edit_description').value = data.description;
-            
-            // Set is_drink checkbox
-            const isDrink = data.isDrink === '1';
-            const editIsDrinkCheckbox = document.getElementById('edit_is_drink');
-            editIsDrinkCheckbox.checked = isDrink;
-            editIsDrinkCheckbox.setAttribute('data-original-value', isDrink ? '1' : '0');
-            
-            // Set is_active checkbox
-            const isActive = data.isActive === '1';
-            document.getElementById('edit_is_active').checked = isActive;
-            
-            editModal.show();
+        // Same waiter: clear cart via AJAX, close modal, stay on page
+        document.getElementById('sameWaiterBtn').addEventListener('click', function() {
+            $.ajax({
+                url: (window.API_BASE||'') + 'api/cart/manage.php?action=clear',
+                method: 'POST',
+                complete: function() {
+                    bootstrap.Modal.getInstance(document.getElementById('orderCompleteModal')).hide();
+                    if (typeof loadCartItems === 'function') loadCartItems();
+                }
+            });
         });
-    });
 
-    // Delete Menu Item
-    const deleteButtons = document.querySelectorAll('.delete-item');
-    const deleteModal = new bootstrap.Modal(document.getElementById('deleteItemModal'));
-    
-    deleteButtons.forEach(button => {
-        button.addEventListener('click', function() {
-            const data = this.dataset;
-            document.getElementById('delete_id').value = data.id;
-            document.getElementById('deleteItemName').textContent = data.name;
-            deleteModal.show();
+        // Initialize dropdowns
+        var dropdownElementList = [].slice.call(document.querySelectorAll('.dropdown-toggle'));
+        dropdownElementList.map(function(el) { return new bootstrap.Dropdown(el); });
+
+        // Menu search
+        jQuery(function($) {
+            const $searchInput = $('#menuSearch');
+            const $menuItems = $('.card');
+
+            $searchInput.on('input', function() {
+                const searchTerm = $(this).val().toLowerCase().trim();
+                if (searchTerm === '') { $menuItems.parent().show(); return; }
+                $menuItems.each(function() {
+                    const $item = $(this);
+                    const match = $item.find('.card-title').text().toLowerCase().includes(searchTerm)
+                               || $item.find('.card-text').text().toLowerCase().includes(searchTerm);
+                    $item.parent().toggle(match);
+                });
+                $('#menuTabs .nav-link[data-bs-target="#all"]').tab('show');
+            });
+
+            $('#menuTabs .nav-link, #menuTabs .dropdown-item').on('click', function() {
+                $searchInput.val('');
+                $menuItems.parent().show();
+            });
         });
-    });
-});
-</script>
-
-<?php include 'footer.php'; ?>
+    </script>
+</body>
+</html>

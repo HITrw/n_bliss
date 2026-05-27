@@ -1,12 +1,6 @@
 <?php
-require_once 'config/config.php';
-require_once 'includes/Database.php';
-
-// If already logged in as waiter, redirect to menu
-if (isset($_SESSION['waiter_id'])) {
-    header("Location: menu.php");
-    exit;
-}
+require_once '../config/config.php';
+require_once '../includes/Database.php';
 
 $db = Database::getInstance();
 
@@ -39,6 +33,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
     }
 }
+
+// Check if a waiter session already exists (show "Continue" notice)
+$existingWaiterName = $_SESSION['waiter_name'] ?? null;
+$existingWaiterId   = $_SESSION['waiter_id']   ?? null;
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -47,7 +45,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= SITE_NAME ?> - Start Ordering</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="assets/css/style.css" rel="stylesheet">
+    <link href="../assets/css/style.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         .login-container {
@@ -76,9 +74,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     <div class="login-container">
         <div class="login-card">
             <div class="text-center mb-4">
-                <img src="assets/images/logo.jpg" alt="<?= SITE_NAME ?>" class="restaurant-logo">
+                <img src="../assets/images/logo.jpg" alt="<?= SITE_NAME ?>" class="restaurant-logo">
                 <h2 class="mb-3">Welcome to <?= SITE_NAME ?></h2>
             </div>
+
+            <?php if ($existingWaiterName): ?>
+                <div class="alert alert-info d-flex align-items-center justify-content-between mb-3">
+                    <span><i class="fas fa-user me-2"></i>Last waiter: <strong><?= htmlspecialchars($existingWaiterName) ?></strong></span>
+                    <a href="menu.php" class="btn btn-sm btn-primary ms-2">Continue with <?= htmlspecialchars($existingWaiterName) ?></a>
+                </div>
+                <hr class="my-3">
+                <p class="text-muted text-center small mb-3">Or select a different waiter:</p>
+            <?php endif; ?>
 
             <?php if (isset($error)): ?>
                 <div class="alert alert-danger"><?= $error ?></div>
