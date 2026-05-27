@@ -59,9 +59,9 @@ Currency: RWF. No decimals in display.
 
 ## Print Ticket Rules
 - Only print ticket if that category has items in order
-- Kitchen ticket: food only, no prices, large font
-- Coffee ticket: coffee items only, no prices
-- Juice ticket: juice items only, no prices
+- Kitchen ticket: food only, with prices, large font
+- Coffee ticket: coffee items only, with prices
+- Juice ticket: juice items only, with prices
 - Each ticket auto-prints via window.print()
 - Each opens in a new window after order submit
 
@@ -72,12 +72,12 @@ Currency: RWF. No decimals in display.
 - PHP spawned as child process on random local port
 
 ## Tasks Status (update after each task)
-- [ ] Task 1: Database schema confirmed
-- [ ] Task 2: Waiter selection on table_login.php
-- [ ] Task 3: Split printing by category
-- [ ] Task 4: Client drinks tab confirmed unchanged
-- [ ] Task 5: Desktop app conversion
-- [ ] Task 6: CLAUDE.md created
+- [ ] Task 2: Database schema confirmed
+- [ ] Task 3: Waiter selection on table_login.php
+- [ ] Task 4: Split printing by category
+- [ ] Task 5: Client drinks tab confirmed unchanged
+- [ ] Task 6: Desktop app conversion
+- [ ] Task 1: CLAUDE.md created
 
 ## Recovery Instructions
 If session was interrupted:
