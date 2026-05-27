@@ -209,14 +209,8 @@ jQuery(function($) {
                         console.log('Order response:', response);
                         if (response.success) {
                             $('#cartSidebar').removeClass('open');
-                            // Open per-category print tickets
                             if (response.orderId && response.tickets) {
-                                const oid = response.orderId;
-                                const base = (window.API_BASE||'') + 'views/print/';
-                                if (response.tickets.coffee)  window.open(base + 'coffee_ticket.php?order_id='  + oid, '_blank');
-                                if (response.tickets.juice)   window.open(base + 'juice_ticket.php?order_id='   + oid, '_blank');
-                                if (response.tickets.bar)     window.open(base + 'bar_ticket.php?order_id='     + oid, '_blank');
-                                if (response.tickets.kitchen) window.open(base + 'kitchen_ticket.php?order_id=' + oid, '_blank');
+                                // Printing is now manual from admin panel per user request
                             }
                             // Show modal if available (admin/menu.php), else show notification
                             if (typeof window.showOrderCompleteModal === 'function') {

@@ -33,21 +33,16 @@ $whereClause = implode(' AND ', $conditions);
 $orders = $db->fetchAll("
     SELECT 
         o.*, 
-        t.table_number,
-        e.name as user_name,
+        o.waiter_name as user_name,
+        e.name as approver_name,
         (
             SELECT GROUP_CONCAT(CONCAT(oi.quantity, 'x ', mi.name) SEPARATOR '\n')
             FROM order_items oi
             LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
             WHERE oi.order_id = o.id
-        ) as items_summary,
-        COUNT(o2.id) as mergeable_orders
+        ) as items_summary
     FROM orders o
-    LEFT JOIN tables t ON o.table_number = t.table_number
     LEFT JOIN employees e ON o.employee_id = e.id
-    LEFT JOIN orders o2 ON o2.table_number = o.table_number 
-        AND o2.id != o.id 
-        AND o2.status = 'pending'
     WHERE {$whereClause}
     GROUP BY o.id
     ORDER BY o.created_at DESC
@@ -96,10 +91,9 @@ include 'header.php';
                     <thead>
                         <tr>
                             <th>Order #</th>
-                            <th>Table</th>
+                            <th>Waiter / Approver</th>
                             <th>Items</th>
                             <th>Total</th>
-                            <th>Waiter(ess)</th>
                             <th>Status</th>
                             <th>Time</th>
                             <th>Actions</th>
@@ -109,7 +103,12 @@ include 'header.php';
                         <?php foreach ($orders as $order): ?>
                             <tr>
                                 <td><?= h($order['order_number']) ?></td>
-                                <td><?= h($order['table_number']) ?></td>
+                                <td>
+                                    <?= h($order['user_name'] ?: 'N/A') ?>
+                                    <?php if ($order['approver_name']): ?>
+                                        <br><small class="text-muted">Approved by: <?= h($order['approver_name']) ?></small>
+                                    <?php endif; ?>
+                                </td>
                                 <td style="white-space: pre-line"><?= h($order['items_summary']) ?></td>
                                 <td>
                                     <?php 
@@ -129,22 +128,6 @@ include 'header.php';
                                     ?> <?= CURRENCY ?>
                                 </td>
                                 <td>
-                                    <?php if ($order['status'] === 'pending'): ?>
-                                        <select class="form-select form-select-sm assign-employee" 
-                                                data-order-id="<?= $order['id'] ?>">
-                                            <option value="">Assign Server</option>
-                                            <?php foreach ($employees as $employee): ?>
-                                                <option value="<?= $employee['id'] ?>" 
-                                                    <?= $order['employee_id'] == $employee['id'] ? 'selected' : '' ?>>
-                                                    <?= h($employee['name']) ?>
-                                                </option>
-                                            <?php endforeach; ?>
-                                        </select>
-                                    <?php else: ?>
-                                        <?= h($order['user_name']) ?>
-                                    <?php endif; ?>
-                                </td>
-                                <td>
                                     <span class="badge bg-<?= getStatusColor($order['status']) ?>">
                                         <?= h(ucfirst($order['status'])) ?>
                                     </span>
@@ -162,13 +145,8 @@ include 'header.php';
                                             </button>
                                         <?php endif; ?>
 
-                                        <button type="button" class="btn btn-sm btn-outline-secondary print-kitchen"
-                                                data-order-id="<?= $order['id'] ?>" title="Print Kitchen Order">
+                                        <button type="button" class="btn btn-sm btn-outline-info" data-bs-toggle="modal" data-bs-target="#printModal" data-order-id="<?= $order['id'] ?>" title="Print Tickets">
                                             <i class="fas fa-print"></i>
-                                        </button>
-                                        <button type="button" class="btn btn-sm btn-outline-primary print-receipt"
-                                                data-order-id="<?= $order['id'] ?>" title="Print Receipt">
-                                            <i class="fas fa-receipt"></i>
                                         </button>
                                         <?php if ($order['status'] !== 'completed'): ?>
                                             <button type="button" class="btn btn-sm btn-outline-success update-status"
@@ -184,16 +162,6 @@ include 'header.php';
                                                 data-action="cancel"
                                                 title="Cancel Order">
                                                 <i class="fas fa-times"></i>
-                                            </button>
-                                        <?php endif; ?>
-                                        <?php if ($order['status'] === 'pending' && $order['mergeable_orders'] > 0): ?>
-                                            <button type="button" class="btn btn-sm btn-outline-info merge-orders"
-                                                    data-bs-toggle="modal"
-                                                    data-bs-target="#mergeOrdersModal"
-                                                    data-order-id="<?= $order['id'] ?>"
-                                                    data-table-number="<?= $order['table_number'] ?>"
-                                                    title="Merge Table Orders">
-                                                <i class="fas fa-object-group"></i>
                                             </button>
                                         <?php endif; ?>
                                     </div>
@@ -482,25 +450,27 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 
-                <!-- Merge Orders Modal -->
-                <div class="modal fade" id="mergeOrdersModal" tabindex="-1">
-                    <div class="modal-dialog">
-                        <div class="modal-content">
-                            <div class="modal-header">
-                                <h5 class="modal-title">Merge Table Orders</h5>
-                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                            </div>
-                            <div class="modal-body">
-                                <p>Select orders to merge:</p>
-                                <div id="mergeable-orders-list"></div>
-                            </div>
-                            <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                                <button type="button" class="btn btn-primary" id="confirmMerge">Merge Orders</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                <!-- Merge Orders Modal (Removed) -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Print Tickets Modal -->
+<div class="modal fade" id="printModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Print Tickets</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body d-grid gap-2">
+                <input type="hidden" id="printOrderId" value="">
+                <button type="button" class="btn btn-outline-primary modal-print-btn" data-type="receipt"><i class="fas fa-receipt me-2"></i>Client Receipt</button>
+                <button type="button" class="btn btn-outline-secondary modal-print-btn" data-type="coffee_ticket"><i class="fas fa-coffee me-2"></i>Coffee Ticket</button>
+                <button type="button" class="btn btn-outline-secondary modal-print-btn" data-type="juice_ticket"><i class="fas fa-glass-water me-2"></i>Juice Ticket</button>
+                <button type="button" class="btn btn-outline-secondary modal-print-btn" data-type="bar_ticket"><i class="fas fa-beer me-2"></i>Bar Ticket</button>
+                <button type="button" class="btn btn-outline-secondary modal-print-btn" data-type="kitchen_ticket"><i class="fas fa-utensils me-2"></i>Kitchen Ticket</button>
             </div>
         </div>
     </div>
@@ -524,44 +494,6 @@ function getStatusColor($status) {
 ?>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-
-    // Handle server assignment
-    document.querySelectorAll('.assign-employee').forEach(select => {
-        select.addEventListener('change', async function() {
-            try {
-                const orderId = this.dataset.orderId;
-                const employeeId = this.value;
-
-                if (!employeeId) {
-                    return;
-                }
-
-                const response = await fetch('../api/orders/update-status.php', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        orderId: orderId,
-                        employeeId: employeeId,
-                        action: 'assign'
-                    })
-                });
-
-                const data = await response.json();
-                
-                if (data.success) {
-                    location.reload();
-                } else {
-                    throw new Error(data.message || 'Failed to assign server');
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                alert(error.message);
-                location.reload();
-            }
-        });
-    });
 
     // Handle status updates
     document.querySelectorAll('.update-status').forEach(button => {
@@ -599,16 +531,77 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Handle printing
-    document.querySelectorAll('.print-kitchen, .print-receipt').forEach(button => {
-        button.addEventListener('click', function() {
-            const orderId = this.dataset.orderId;
-            const type = this.classList.contains('print-kitchen') ? 'kitchen' : 'receipt';
+    // Set order ID and filter tickets in print modal
+    const printModal = document.getElementById('printModal');
+    if (printModal) {
+        printModal.addEventListener('show.bs.modal', async function(event) {
+            const button = event.relatedTarget;
+            const orderId = button.getAttribute('data-order-id');
+            document.getElementById('printOrderId').value = orderId;
             
-            window.open(`../api/orders/print.php?id=${orderId}&type=${type}`, '_blank');
+            // Hide all specific ticket buttons initially (except receipt)
+            const btnCoffee = document.querySelector('.modal-print-btn[data-type="coffee_ticket"]');
+            const btnJuice = document.querySelector('.modal-print-btn[data-type="juice_ticket"]');
+            const btnBar = document.querySelector('.modal-print-btn[data-type="bar_ticket"]');
+            const btnKitchen = document.querySelector('.modal-print-btn[data-type="kitchen_ticket"]');
+            
+            btnCoffee.style.display = 'none';
+            btnJuice.style.display = 'none';
+            btnBar.style.display = 'none';
+            btnKitchen.style.display = 'none';
+            
+            try {
+                const response = await fetch(`../api/orders/get-items.php?order_id=${orderId}`);
+                const data = await response.json();
+                
+                if (data.success && data.items) {
+                    let hasCoffee = false;
+                    let hasJuice = false;
+                    let hasBar = false;
+                    let hasKitchen = false;
+                    
+                    data.items.forEach(item => {
+                        const catName = (item.category_name || '').toLowerCase();
+                        const isDrink = item.is_drink == 1;
+                        
+                        if (catName.includes('coffee') || catName.includes('tea') || catName.includes('hot')) {
+                            hasCoffee = true;
+                        } else if (catName.includes('juice') || catName.includes('smoothie')) {
+                            hasJuice = true;
+                        } else if (isDrink) {
+                            hasBar = true;
+                        } else {
+                            hasKitchen = true;
+                        }
+                    });
+                    
+                    if (hasCoffee) btnCoffee.style.display = 'block';
+                    if (hasJuice) btnJuice.style.display = 'block';
+                    if (hasBar) btnBar.style.display = 'block';
+                    if (hasKitchen) btnKitchen.style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Error fetching items for print modal:', error);
+            }
+        });
+    }
+
+    // Handle printing from modal
+    document.querySelectorAll('.modal-print-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const orderId = document.getElementById('printOrderId').value;
+            const type = this.dataset.type; // receipt, coffee_ticket, juice_ticket, bar_ticket, kitchen_ticket
+            
+            if (type === 'receipt') {
+                window.open(`../api/orders/print.php?id=${orderId}&type=receipt`, '_blank');
+            } else {
+                window.open(`../views/print/${type}.php?order_id=${orderId}`, '_blank');
+            }
+            
+            // Close the modal
+            bootstrap.Modal.getInstance(printModal).hide();
         });
     });
 });
 </script>
-<script src="../assets/js/merge.js"></script>
 <?php include 'footer.php'; ?>

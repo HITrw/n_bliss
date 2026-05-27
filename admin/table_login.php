@@ -28,7 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $_SESSION['waiter_id']   = $waiter['id'];
             $_SESSION['waiter_name'] = $waiter['name'];
 
-            header("Location: menu.php");
+            header("Location: pos.php");
             exit;
         }
     }
@@ -81,7 +81,7 @@ $existingWaiterId   = $_SESSION['waiter_id']   ?? null;
             <?php if ($existingWaiterName): ?>
                 <div class="alert alert-info d-flex align-items-center justify-content-between mb-3">
                     <span><i class="fas fa-user me-2"></i>Last waiter: <strong><?= htmlspecialchars($existingWaiterName) ?></strong></span>
-                    <a href="menu.php" class="btn btn-sm btn-primary ms-2">Continue with <?= htmlspecialchars($existingWaiterName) ?></a>
+                    <a href="pos.php" class="btn btn-sm btn-primary ms-2">Continue with <?= htmlspecialchars($existingWaiterName) ?></a>
                 </div>
                 <hr class="my-3">
                 <p class="text-muted text-center small mb-3">Or select a different waiter:</p>

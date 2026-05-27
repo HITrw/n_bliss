@@ -19,6 +19,8 @@ try {
             mi.name, 
             oi.quantity, 
             mi.price as menu_price,
+            mi.is_drink,
+            c.name as category_name,
             oi.original_price,
             oi.final_price,
             oi.discount_type,
@@ -34,6 +36,7 @@ try {
             END as current_final_price
         FROM order_items oi
         JOIN menu_items mi ON mi.id = oi.menu_item_id
+        LEFT JOIN categories c ON mi.category_id = c.id
         WHERE oi.order_id = ?
         ORDER BY mi.name
     ", [$orderId]);

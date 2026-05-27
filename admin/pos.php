@@ -57,7 +57,7 @@ foreach ($categories as $category) {
     <!-- Navigation - Only visible on desktop -->
     <nav class="navbar navbar-dark bg-dark sticky-top d-none d-lg-block">
         <div class="container">
-            <a class="navbar-brand" href="menu.php">
+            <a class="navbar-brand" href="pos.php">
                 <img src="../assets/images/logo.jpg" alt="<?= SITE_NAME ?>" height="40">
             </a>
             <ul class="navbar-nav ms-auto d-flex flex-row">
@@ -226,7 +226,7 @@ foreach ($categories as $category) {
 
     <!-- Mobile Bottom Navigation -->
     <nav class="mobile-bottom-nav d-lg-none" style="position: fixed; bottom: 0; left: 0; right: 0; background: #343a40; display: flex; justify-content: space-around; align-items: center; padding: 0.5rem; z-index: 1000; box-shadow: 0 -2px 10px rgba(0,0,0,0.1);">
-        <a href="menu.php" class="mobile-nav-item active" style="color: #fff; text-decoration: none; display: flex; flex-direction: column; align-items: center; padding: 0.5rem 1rem; position: relative;">
+        <a href="pos.php" class="mobile-nav-item active" style="color: #fff; text-decoration: none; display: flex; flex-direction: column; align-items: center; padding: 0.5rem 1rem; position: relative;">
             <i class="fas fa-utensils" style="font-size: 1.2rem; margin-bottom: 0.2rem;"></i>
             <span style="font-size: 0.8rem;">Menu</span>
         </a>
