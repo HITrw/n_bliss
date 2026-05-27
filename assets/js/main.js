@@ -211,6 +211,15 @@ jQuery(function($) {
                             showNotification(`Order #${response.orderNumber} placed successfully!`, 'success');
                             loadCartItems();
                             $('#cartSidebar').removeClass('open');
+                            // Open per-category print tickets
+                            if (response.orderId && response.tickets) {
+                                const oid = response.orderId;
+                                const base = 'views/print/';
+                                if (response.tickets.coffee)  window.open(base + 'coffee_ticket.php?order_id='  + oid, '_blank');
+                                if (response.tickets.juice)   window.open(base + 'juice_ticket.php?order_id='   + oid, '_blank');
+                                if (response.tickets.bar)     window.open(base + 'bar_ticket.php?order_id='     + oid, '_blank');
+                                if (response.tickets.kitchen) window.open(base + 'kitchen_ticket.php?order_id=' + oid, '_blank');
+                            }
                         } else {
                             showNotification(response.message || 'Error placing order', 'error');
                         }

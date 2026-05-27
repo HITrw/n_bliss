@@ -150,10 +150,33 @@ try {
             throw new Exception('Failed to commit transaction');
         }
 
+        // Detect which ticket types have items in this order
+        $ticketRows = $db->fetchAll("
+            SELECT DISTINCT
+                CASE
+                    WHEN mi.category_id IN (24,25,26) THEN 'coffee'
+                    WHEN mi.category_id IN (27,28,29,30) THEN 'juice'
+                    WHEN (c.id IN (12,20) OR c.parent_id IN (12,20)) THEN 'kitchen'
+                    ELSE 'bar'
+                END as ticket_type
+            FROM order_items oi
+            JOIN menu_items mi ON oi.menu_item_id = mi.id
+            JOIN categories c ON mi.category_id = c.id
+            WHERE oi.order_id = ?
+        ", [$orderId]);
+        $ticketTypes = array_column($ticketRows, 'ticket_type');
+
         echo json_encode([
-            'success' => true,
-            'message' => 'Order created successfully',
-            'orderNumber' => $orderNumber
+            'success'     => true,
+            'message'     => 'Order created successfully',
+            'orderNumber' => $orderNumber,
+            'orderId'     => $orderId,
+            'tickets'     => [
+                'coffee'  => in_array('coffee',  $ticketTypes),
+                'juice'   => in_array('juice',   $ticketTypes),
+                'bar'     => in_array('bar',     $ticketTypes),
+                'kitchen' => in_array('kitchen', $ticketTypes),
+            ]
         ]);
 
     } catch (Exception $e) {

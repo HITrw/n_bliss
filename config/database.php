@@ -1,8 +1,8 @@
 <?php
 define('DB_HOST', 'localhost');
-define('DB_USER', 'nsblqjkh');
-define('DB_PASS', '^j^528dv6MJSk9#');
-define('DB_NAME', 'nsblqjkh_bliss_restaurant');
+define('DB_USER', 'root');
+define('DB_PASS', '');
+define('DB_NAME', 'bliss');
 
 try {
     $pdo = new PDO(
