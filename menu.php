@@ -42,8 +42,6 @@ foreach ($categories as $category) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8639623010963658"
-     crossorigin="anonymous"></script>
     <title><?= SITE_NAME ?> - Menu</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="assets/css/style.css" rel="stylesheet">
@@ -51,7 +49,7 @@ foreach ($categories as $category) {
         // Global constants
         const CURRENCY = <?php echo json_encode(CURRENCY); ?>;
         const BASE_URL = <?php echo json_encode(BASE_URL); ?>;
-        const TABLE_NUMBER = <?php echo json_encode($_SESSION['table_number']); ?>;
+        const WAITER_NAME = <?php echo json_encode($_SESSION['waiter_name'] ?? ''); ?>;
     </script>
 </head>
 <body>    <!-- Navigation - Only visible on desktop -->
@@ -62,7 +60,7 @@ foreach ($categories as $category) {
             </a>
             <ul class="navbar-nav ms-auto d-flex flex-row">
                 <li class="nav-item mx-2">
-                    <span class="nav-link">Table #<?= $_SESSION['table_number'] ?></span>
+                    <span class="nav-link">Waiter: <?= htmlspecialchars($_SESSION['waiter_name'] ?? '') ?></span>
                 </li>
                 <li class="nav-item mx-2">
                     <a class="nav-link cart-link" href="#" id="cartToggle2">
@@ -79,9 +77,9 @@ foreach ($categories as $category) {
         </div>
     </nav>
     
-    <!-- Mobile Table Number Display -->
+    <!-- Mobile Waiter Display -->
     <div class="d-lg-none bg-dark text-white text-center py-2" style="position: fixed; top: 0; left: 0; right: 0; z-index: 1000;">
-        <span>Table #<?= $_SESSION['table_number'] ?></span>
+        <span>Waiter: <?= htmlspecialchars($_SESSION['waiter_name'] ?? '') ?></span>
     </div>
 
     <!-- Cart Sidebar -->
@@ -278,8 +276,7 @@ foreach ($categories as $category) {
                             { id: 1, name: 'Item 1', quantity: 2, price: 10.0 },
                             { id: 2, name: 'Item 2', quantity: 1, price: 15.0 }
                         ],
-                        total: 35.0, // Add total field
-                        tableNumber: TABLE_NUMBER
+                        total: 35.0
                     };
 
                     // AJAX request to submit cart data

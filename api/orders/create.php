@@ -13,8 +13,8 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Check if table is logged in
-if (!isset($_SESSION['table_number'])) {
+// Check if waiter is logged in
+if (!isset($_SESSION['waiter_id'])) {
     http_response_code(401);
     echo json_encode(['success' => false, 'message' => 'Not logged in']);
     exit;
@@ -35,8 +35,8 @@ try {
     error_log("Create Order Input: " . $rawInput);
 
     // Validate input
-    if (!$input || !isset($input['items']) || !isset($input['total']) || !isset($input['table_number'])) {
-        throw new Exception('Missing required fields: items, total, table_number', 400);
+    if (!$input || !isset($input['items']) || !isset($input['total'])) {
+        throw new Exception('Missing required fields: items, total', 400);
     }
 
     // Validate cart is not empty
@@ -44,13 +44,8 @@ try {
         throw new Exception('Cart is empty', 400);
     }
 
-    // Validate table number matches session
-    if ($input['table_number'] != $_SESSION['table_number']) {
-        throw new Exception('Table number mismatch', 400);
-    }
-
     $db = Database::getInstance();
-    $cart = new Cart($_SESSION['table_number']);
+    $cart = new Cart($_SESSION['waiter_id']);
 
     // Verify cart has items
     $cartItems = $cart->getItems();
@@ -65,9 +60,11 @@ try {
 
     try {
         // Create order
+        $waiter_id   = $_SESSION['waiter_id']   ?? null;
+        $waiter_name = $_SESSION['waiter_name'] ?? null;
         $success = $db->execute(
-            "INSERT INTO orders (table_number, total_amount, status, created_at) VALUES (?, ?, 'pending', NOW())",
-            [$_SESSION['table_number'], $input['total']]
+            "INSERT INTO orders (table_number, total_amount, status, waiter_id, waiter_name, created_at) VALUES (NULL, ?, 'pending', ?, ?, NOW())",
+            [$input['total'], $waiter_id, $waiter_name]
         );
 
         if (!$success) {

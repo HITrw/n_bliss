@@ -17,9 +17,9 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Check if table is logged in
-if (!isset($_SESSION['table_number'])) {
-    error_log("Cart API: No table number in session");
+// Check if waiter is logged in
+if (!isset($_SESSION['waiter_id'])) {
+    error_log("Cart API: No waiter_id in session");
     http_response_code(401);
     echo json_encode([
         'status' => 'error',
@@ -29,7 +29,7 @@ if (!isset($_SESSION['table_number'])) {
 }
 
 try {
-    $cart = new Cart($_SESSION['table_number']);
+    $cart = new Cart($_SESSION['waiter_id']);
     
     // Get request data - support both JSON and form data
     $contentType = isset($_SERVER["CONTENT_TYPE"]) ? trim($_SERVER["CONTENT_TYPE"]) : '';

@@ -159,12 +159,6 @@ jQuery(function($) {
         console.log('Checkout button clicked');
         const $btn = $(this);
         
-        // Check if table number is available
-        if (typeof TABLE_NUMBER === 'undefined' || !TABLE_NUMBER) {
-            showNotification('Table number not found. Please login again.', 'error');
-            return;
-        }
-        
         // Confirm order placement
         if (!confirm('Are you sure you want to place your order?')) {
             return;
@@ -195,7 +189,6 @@ jQuery(function($) {
 
                 // Prepare order data
                 const orderData = {
-                    table_number: TABLE_NUMBER,
                     items: cartResponse.data.items.map(item => ({
                         id: item.menu_item_id,
                         quantity: item.quantity,
@@ -301,7 +294,6 @@ function handleCheckout(e) {
 
                 // Prepare order data
                 const orderData = {
-                    table_number: TABLE_NUMBER,
                     items: cartResponse.data.items.map(item => ({
                         id: item.menu_item_id,
                         quantity: item.quantity,

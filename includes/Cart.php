@@ -1,17 +1,17 @@
 <?php
 class Cart {
     private $db;
-    private $table_number;
+    private $table_number; // stores waiter_id used as cart session key
 
-    public function __construct($table_number = null) {
+    public function __construct($cart_key = null) {
         $this->db = Database::getInstance();
-        $this->table_number = $table_number ?? $_SESSION['table_number'] ?? null;
+        $this->table_number = $cart_key ?? $_SESSION['waiter_id'] ?? null;
         
         if (!$this->table_number) {
-            error_log("Cart: No table number provided");
-            throw new Exception("No table number provided");
+            error_log("Cart: No cart key (waiter_id) provided");
+            throw new Exception("No cart key provided");
         }
-        error_log("Cart: Initialized for table " . $this->table_number);
+        error_log("Cart: Initialized for waiter " . $this->table_number);
     }
 
     public function addItem($menu_item_id, $quantity = 1) {
